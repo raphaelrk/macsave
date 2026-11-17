@@ -25,6 +25,8 @@ struct MainView: View {
     @AppStorage("saveTemplate") private var template = Saver.defaultTemplate
     @AppStorage("saveJSON") private var saveJSON = false
     @AppStorage("aiProvider") private var aiProvider = AIProvider.claude.rawValue
+    @AppStorage("popoverWidth") private var width = PopoverSize.defaultWidth
+    @AppStorage("popoverHeight") private var height = PopoverSize.defaultHeight
     @State private var showSettings = false
     @State private var copied = false
     @State private var saved = false
@@ -74,7 +76,8 @@ struct MainView: View {
 
             if mode.isText { footerBar }
         }
-        .frame(minWidth: 760, minHeight: 480)
+        .frame(width: PopoverSize.clampW(width), height: PopoverSize.clampH(height))
+        .overlay(ResizeGrip(width: $width, height: $height), alignment: .bottomTrailing)
         .background(Color.white)
         .environment(\.colorScheme, .light)
     }
@@ -312,4 +315,46 @@ func styledText(_ lines: [StyledLine]) -> NSAttributedString {
         out.append(piece)
     }
     return out
+}
+
+enum PopoverSize {
+    static let defaultWidth: Double = 900, defaultHeight: Double = 640
+    private static var screen: CGRect { NSScreen.main?.visibleFrame ?? CGRect(x: 0, y: 0, width: 1440, height: 900) }
+    static func clampW(_ w: Double) -> Double { min(max(w, 560), screen.width - 20) }
+    static func clampH(_ h: Double) -> Double { min(max(h, 360), screen.height - 30) }
+}
+
+/// Bottom-right drag handle for the popover (NSPopover has no native resizing). Double-click resets.
+struct ResizeGrip: View {
+    @Binding var width: Double
+    @Binding var height: Double
+    @State private var start: (mouse: NSPoint, w: Double, h: Double)?
+
+    var body: some View {
+        Canvas { ctx, size in
+            for i in 0..<3 {
+                let o = CGFloat(i) * 4 + 3
+                var p = Path()
+                p.move(to: CGPoint(x: size.width - o, y: size.height - 2))
+                p.addLine(to: CGPoint(x: size.width - 2, y: size.height - o))
+                ctx.stroke(p, with: .color(.black.opacity(0.35)), lineWidth: 1.2)
+            }
+        }
+        .frame(width: 16, height: 16)
+        .padding(2)
+        .contentShape(Rectangle())
+        .help("Drag to resize · double-click to reset")
+        .onTapGesture(count: 2) {
+            width = PopoverSize.defaultWidth
+            height = PopoverSize.defaultHeight
+        }
+        .gesture(DragGesture(minimumDistance: 1).onChanged { _ in
+            // Screen coordinates: the popover moves while it resizes, so view-local deltas would jitter.
+            let m = NSEvent.mouseLocation
+            if start == nil { start = (m, PopoverSize.clampW(width), PopoverSize.clampH(height)) }
+            guard let s = start else { return }
+            width = PopoverSize.clampW(s.w + (m.x - s.mouse.x))
+            height = PopoverSize.clampH(s.h + (s.mouse.y - m.y))
+        }.onEnded { _ in start = nil })
+    }
 }

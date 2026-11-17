@@ -26,9 +26,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem.button?.action = #selector(toggle)
         statusItem.button?.target = self
         popover.behavior = .transient
-        popover.contentSize = NSSize(width: 900, height: 640)
+        popover.animates = false
         popover.appearance = NSAppearance(named: .aqua)
-        popover.contentViewController = NSHostingController(rootView: MainView(model: model))
+        let host = NSHostingController(rootView: MainView(model: model))
+        host.sizingOptions = [.preferredContentSize]
+        popover.contentViewController = host
         let opts = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
         _ = AXIsProcessTrustedWithOptions(opts)
         DispatchQueue.main.async { self.toggle() }
