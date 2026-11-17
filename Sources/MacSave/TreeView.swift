@@ -83,6 +83,7 @@ struct TreeView: View {
                     Button("Expand all") { collapsed = [] }
                     Spacer()
                     if searching { Text("filtering — collapse ignored").foregroundColor(.secondary) }
+                    CloseMinimizedButton(model: model)
                 }
                 .buttonStyle(.link)
                 .font(.system(size: 12))
@@ -309,6 +310,31 @@ struct PreviewEye: View {
                 tried = true
             }
             .onDisappear { pinned = false }
+        }
+    }
+}
+
+/// Two-step button: first click arms it, second click (within 4s) closes every minimized window.
+struct CloseMinimizedButton: View {
+    @ObservedObject var model: Model
+    @State private var armed = false
+
+    var body: some View {
+        let n = model.closableMinimized.count
+        if n > 0 {
+            Button(armed ? "Click again to close \(n) minimized window\(n == 1 ? "" : "s")" : "Close minimized (\(n))") {
+                if armed {
+                    armed = false
+                    model.closeMinimized()
+                } else {
+                    armed = true
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 4) { armed = false }
+                }
+            }
+            .buttonStyle(.plain)
+            .font(.system(size: 12, weight: armed ? .bold : .regular))
+            .foregroundColor(Color(hex: 0xD93A3A))
+            .help("Closes every minimized window (apps may ask about unsaved changes)")
         }
     }
 }

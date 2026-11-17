@@ -10,7 +10,8 @@ extension Color {
 }
 
 enum Mode: String, CaseIterable {
-    case curr, all, min, view
+    case curr, all, min, view, gallery
+    var isText: Bool { self == .curr || self == .all || self == .min }
     var scope: Scope { self == .curr ? .current : self == .min ? .minimized : .all }
 }
 
@@ -34,7 +35,7 @@ struct MainView: View {
     }
     private var lines: [StyledLine] {
         guard let s = model.snapshot else { return [] }
-        return styledLines(s, scope: mode == .view ? .all : mode.scope, options: options, summary: model.summary)
+        return styledLines(s, scope: mode.scope, options: options, summary: model.summary)
     }
     private var text: String { lines.isEmpty ? "" : lines.map(\.text).joined(separator: "\n") + "\n" }
     private var provider: AIProvider? {
@@ -48,15 +49,17 @@ struct MainView: View {
             Group {
                 if mode == .view {
                     if model.snapshot != nil { TreeView(model: model) } else { loadingView }
+                } else if mode == .gallery {
+                    if model.snapshot != nil { GalleryView(model: model) } else { loadingView }
                 } else {
                     textPane
                 }
             }
             .padding(12)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(mode == .view ? Color.headerRed : Color.white)
+            .background(mode.isText ? Color.white : Color.headerRed)
 
-            if mode != .view && (!model.status.isEmpty || model.lastSaved != nil) {
+            if mode.isText && (!model.status.isEmpty || model.lastSaved != nil) {
                 HStack {
                     Text(model.status).font(.caption).foregroundColor(.secondary).lineLimit(2)
                     Spacer()
@@ -69,7 +72,7 @@ struct MainView: View {
                 .background(Color.white)
             }
 
-            if mode != .view { footerBar }
+            if mode.isText { footerBar }
         }
         .frame(minWidth: 760, minHeight: 480)
         .background(Color.white)
@@ -247,8 +250,8 @@ struct SnapshotTextView: NSViewRepresentable {
         tv.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
         tv.textContainer?.widthTracksTextView = false
         tv.textContainer?.containerSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
-        tv.linkTextAttributes = [.foregroundColor: StyleColors.link, .underlineStyle: NSUnderlineStyle.single.rawValue,
-                                 .cursor: NSCursor.pointingHand]
+        // Colors/underline come from styledText so minimized windows' links can be faded.
+        tv.linkTextAttributes = [.cursor: NSCursor.pointingHand]
         return scroll
     }
 
@@ -294,15 +297,16 @@ func styledText(_ lines: [StyledLine]) -> NSAttributedString {
             font = .systemFont(ofSize: size, weight: l.active ? .semibold : .light)
             color = l.isPath ? StyleColors.path : StyleColors.link
         }
-        if l.dim { color = color.withAlphaComponent(0.4) }
+        if l.dim { color = color.withAlphaComponent(l.role == .link ? 0.3 : 0.4) }
         let piece = NSMutableAttributedString(string: l.text + (i < lines.count - 1 ? "\n" : ""), attributes: [
             .font: font, .foregroundColor: color, .paragraphStyle: para,
         ])
         if let url = l.url, let u = URL(string: url) {
             let r = (l.text as NSString).range(of: url, options: .backwards)
             if r.location != NSNotFound {
-                piece.addAttributes([.link: u, .foregroundColor: StyleColors.link.withAlphaComponent(l.dim ? 0.4 : 1),
-                                     .underlineStyle: NSUnderlineStyle.single.rawValue], range: r)
+                piece.addAttributes([.link: u, .foregroundColor: StyleColors.link.withAlphaComponent(l.dim ? 0.3 : 1),
+                                     .underlineStyle: NSUnderlineStyle.single.rawValue,
+                                     .underlineColor: StyleColors.link.withAlphaComponent(l.dim ? 0.25 : 1)], range: r)
             }
         }
         out.append(piece)

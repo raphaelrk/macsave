@@ -4,7 +4,7 @@ import SwiftUI
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
     private let popover = NSPopover()
-    private let model = Model()
+    private let model = Model(demo: CommandLine.arguments.contains("--demo"))
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -40,8 +40,11 @@ final class Model: ObservableObject {
     @Published var status = ""
     @Published var lastSaved: URL?
     @Published var ai: [AIProvider: String] = [:]
+    /// Demo mode shows fake data and never touches real windows.
+    let demo: Bool
 
-    init() {
+    init(demo: Bool = false) {
+        self.demo = demo
         DispatchQueue.global().async {
             let found = AI.available()
             DispatchQueue.main.async { self.ai = found }
@@ -50,6 +53,13 @@ final class Model: ObservableObject {
 
     func refresh() {
         guard !loading else { return }
+        if demo {
+            let s = Demo.snapshot()
+            Previews.demo = Demo.images(s)
+            snapshot = s
+            status = "Demo data"
+            return
+        }
         loading = true
         status = "Scanning windows…"
         DispatchQueue.global(qos: .userInitiated).async {
@@ -65,8 +75,9 @@ final class Model: ObservableObject {
     }
 
     func close(_ w: WindowInfo, tab: TabInfo? = nil) {
+        let demo = self.demo
         DispatchQueue.global(qos: .userInitiated).async {
-            let err = tab.map { Closer.closeTab($0, in: w) } ?? Closer.closeWindow(w)
+            let err = demo ? nil : tab.map { Closer.closeTab($0, in: w) } ?? Closer.closeWindow(w)
             DispatchQueue.main.async {
                 if let err { self.status = err; return }
                 guard var s = self.snapshot, let wi = s.windows.firstIndex(where: { $0.same(w) }) else { return }
@@ -78,6 +89,30 @@ final class Model: ObservableObject {
                     self.status = "Closed \(w.app) window"
                 }
                 self.snapshot = s
+            }
+        }
+    }
+
+    var closableMinimized: [WindowInfo] {
+        snapshot?.windows.filter { $0.minimized && Closer.canClose($0) } ?? []
+    }
+
+    func closeMinimized() {
+        let targets = closableMinimized
+        guard !targets.isEmpty else { return }
+        status = "Closing \(targets.count) minimized windows…"
+        let demo = self.demo
+        DispatchQueue.global(qos: .userInitiated).async {
+            var closed: [WindowInfo] = []
+            for w in targets where demo || Closer.closeWindow(w) == nil { closed.append(w) }
+            DispatchQueue.main.async {
+                if var s = self.snapshot {
+                    s.windows.removeAll { w in closed.contains { $0.same(w) } }
+                    self.snapshot = s
+                }
+                let failed = targets.count - closed.count
+                self.status = "Closed \(closed.count) minimized window\(closed.count == 1 ? "" : "s")"
+                    + (failed > 0 ? " · \(failed) couldn't be closed" : "")
             }
         }
     }
@@ -101,12 +136,14 @@ final class Model: ObservableObject {
 
 
 /// Debug: render each mode of the popover offscreen to PNGs (`MacSave --screenshot <dir>`).
-func renderScreenshots(to dir: String) {
+func renderScreenshots(to dir: String, demo: Bool) {
     let app = NSApplication.shared
     app.setActivationPolicy(.prohibited)
-    let model = Model()
-    model.snapshot = Collector.snapshot()
-    model.status = "Captured (screenshot mode)"
+    let model = Model(demo: demo)
+    if demo { model.refresh() } else { model.snapshot = Collector.snapshot() }
+    model.status = demo ? "Captured Nov 16 2026 12:33 PM Mon in 0.9s" : "Captured (screenshot mode)"
+    let saved = UserDefaults.standard.string(forKey: "mode")
+    defer { UserDefaults.standard.set(saved, forKey: "mode") }
     for mode in Mode.allCases {
         UserDefaults.standard.set(mode.rawValue, forKey: "mode")
         let view = NSHostingView(rootView: MainView(model: model))
@@ -116,7 +153,8 @@ func renderScreenshots(to dir: String) {
         window.contentView = view
         view.frame = window.contentLayoutRect
         view.layoutSubtreeIfNeeded()
-        RunLoop.current.run(until: Date().addingTimeInterval(0.5))
+        RunLoop.current.run(until: Date().addingTimeInterval(1.5))
+        view.layoutSubtreeIfNeeded()
         guard let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { continue }
         view.cacheDisplay(in: view.bounds, to: rep)
         let url = URL(fileURLWithPath: dir).appendingPathComponent("macsave-\(mode.rawValue).png")

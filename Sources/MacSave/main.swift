@@ -34,7 +34,7 @@ if let i = argv.firstIndex(of: "--preview-test"), i + 1 < argv.count {
         print(Closer.closeWindow(w) ?? "closed \(w.app) — \(w.title)")
     } else { print("window \(wid) not found") }
 } else if let i = argv.firstIndex(of: "--screenshot"), i + 1 < argv.count {
-    renderScreenshots(to: argv[i + 1])
+    renderScreenshots(to: argv[i + 1], demo: argv.contains("--demo"))
 } else if argv.contains(where: { cliFlags.contains($0) || $0.hasPrefix("--scope") }) {
     runCLI(argv)
 } else {
@@ -60,11 +60,12 @@ func runCLI(_ args: [String]) {
           --one-line / --no-urls / --tabs-only
           --summarize claude|codex  prepend an AI summary
           --save [template]       save to file (default \(Saver.defaultTemplate))
+          --demo                  use fake data (also works for the app: MacSave --demo)
         Run without flags to launch the menu bar app.
         """)
         return
     }
-    let snap = Collector.snapshot()
+    let snap = args.contains("--demo") ? Demo.snapshot() : Collector.snapshot()
     if args.contains("--json") {
         let enc = JSONEncoder()
         enc.outputFormatting = [.prettyPrinted, .sortedKeys]

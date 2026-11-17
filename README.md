@@ -1,9 +1,22 @@
-# MacSave
+# <img src="docs/icon.png" width="40" align="top"> MacSave
 
 Tabsave for the whole Mac: a menu-bar app that snapshots every app's windows and tabs,
 grouped by macOS desktop (Space), and saves them to a note in one click — e.g.
 `~/projects/notes/2026/2026-11-16/closing-windows-1233.txt`. Optional "Summarize with AI"
 prepends a summary from the local `claude` or `codex` CLI.
+
+![Gallery: each desktop with previews of its windows](docs/screenshots/macsave-gallery.png)
+
+| Text export (`all`) | Tree (`view`) |
+|---|---|
+| ![](docs/screenshots/macsave-all.png) | ![](docs/screenshots/macsave-view.png) |
+
+Tabs: **curr / all / min** are the text export for the current desktop, every desktop, or only minimized and hidden windows (Copy, Save, Summarize).
+**view** is a searchable, collapsible tree with ✕ buttons. **gallery** shows each desktop's composite next to previews of its windows; minimized windows are faded.
+*Close minimized* (in view and gallery) closes every minimized window after a second click to confirm.
+
+Screenshots use built-in fake data: `MacSave --demo` runs the app with it, and
+`.build/debug/MacSave --demo --screenshot docs/screenshots` re-renders these images.
 
 ## Build / run
 
@@ -19,7 +32,7 @@ CLI: `MacSave --print [--markdown] [--one-line] [--no-urls] [--tabs-only] [--sco
 
 - **Accessibility** — window titles, minimized state, windows on other desktops, native tabs (Finder etc.).
 - **Automation** (prompted per app on first scan) — tabs from Chrome-family/Arc/Safari, iTerm2, Terminal, Finder.
-- **Screen Recording** (optional) — eye-icon previews of windows/desktops in the View tab.
+- **Screen Recording** (optional) — eye-icon previews and the gallery tab.
 - Without Accessibility it still works via CoreGraphics + AppleScript, with less detail.
 
 ## Where the data comes from
@@ -37,10 +50,16 @@ Script windows are matched to real windows by bounds + title; unmatched ones lan
 
 ## Closing
 
-The View tab has ✕ buttons: windows close via AppleScript (browsers) or the Accessibility close button;
+The view tab has ✕ buttons: windows close via AppleScript (browsers) or the Accessibility close button;
 Chrome-family/Safari tabs close individually.
 
 ## Not done yet / ideas
 
 - Chrome tab groups, Arc spaces, Warp/Ghostty tabs, JetBrains, Xcode projects.
 - Global hotkey; restore a saved session.
+
+The app icon is drawn by `swift scripts/make-icon.swift Resources/AppIcon.icns docs/icon.png`.
+
+## License
+
+MIT
