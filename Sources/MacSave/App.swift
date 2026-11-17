@@ -6,7 +6,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let popover = NSPopover()
     private let model = Model(demo: CommandLine.arguments.contains("--demo"))
 
+    static let showNotification = Notification.Name("com.raphaelrk.macsave.show")
+
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Single instance: another copy (e.g. build/ vs ~/Applications) hands off to the running one.
+        let me = NSRunningApplication.current
+        if let id = Bundle.main.bundleIdentifier,
+           NSRunningApplication.runningApplications(withBundleIdentifier: id).contains(where: { $0 != me && !$0.isTerminated }) {
+            DistributedNotificationCenter.default().postNotificationName(Self.showNotification, object: nil, userInfo: nil,
+                                                                         deliverImmediately: true)
+            NSApp.terminate(nil)
+            return
+        }
+        DistributedNotificationCenter.default().addObserver(forName: Self.showNotification, object: nil, queue: .main) { [weak self] _ in
+            self?.show()
+        }
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         statusItem.button?.image = NSImage(systemSymbolName: "macwindow.on.rectangle", accessibilityDescription: "MacSave")
         statusItem.button?.action = #selector(toggle)
@@ -19,6 +33,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         _ = AXIsProcessTrustedWithOptions(opts)
         DispatchQueue.main.async { self.toggle() }
     }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        show()
+        return false
+    }
+
+    func show() { if !popover.isShown { toggle() } }
 
     @objc func toggle() {
         guard let button = statusItem.button else { return }
